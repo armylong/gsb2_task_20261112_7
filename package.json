@@ -1,0 +1,14 @@
+{
+  "name": "game-version-diff-checker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "本地游戏版本画面差异检查工具（零依赖静态网页）",
+  "scripts": {
+    "start": "python3 -m http.server 8000",
+    "test:unit": "node tools/test-diff-core.js",
+    "test:smoke": "node tools/smoke-cdp.js && node tools/smoke-cdp-mismatch.js && node tools/smoke-cdp-interact.js && node tools/smoke-cdp-jpeg.js",
+    "test": "node tools/test-diff-core.js",
+    "gen-samples": "python3 -I tools/generate_samples.py"
+  }
+}

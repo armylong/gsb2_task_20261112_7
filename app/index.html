@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>游戏版本画面差异检查工具</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="app-header">
+    <div class="title">
+      <h1>游戏版本画面差异检查</h1>
+      <span class="subtitle">本地运行 · 图片不上传 · 滑块对照 / 半透明叠加 / 差异热图</span>
+    </div>
+    <div class="header-actions">
+      <button id="btn-samples" class="btn ghost" type="button">载入内置示例</button>
+      <button id="btn-export-png" class="btn" type="button" disabled>导出 PNG 报告</button>
+      <button id="btn-export-json" class="btn primary" type="button" disabled>导出 JSON 报告</button>
+    </div>
+  </header>
+
+  <!-- ① 导入区：两张图各自独立的状态卡 -->
+  <section class="import-row">
+    <div class="import-card" id="card-a">
+      <div class="import-card-head">
+        <span class="badge a">图 A（旧版本）</span>
+        <span class="status" id="status-a"><span class="dot idle"></span>未导入</span>
+      </div>
+      <label class="drop-zone" id="drop-a">
+        <input type="file" id="file-a" accept="image/png,image/jpeg,image/webp,image/bmp" hidden />
+        <div class="drop-hint">
+          <strong>点击选择 / 拖入图片</strong>
+          <small>PNG · JPG · WebP · BMP</small>
+        </div>
+      </label>
+      <div class="meta" id="meta-a"></div>
+    </div>
+
+    <div class="import-card" id="card-b">
+      <div class="import-card-head">
+        <span class="badge b">图 B（新版本）</span>
+        <span class="status" id="status-b"><span class="dot idle"></span>未导入</span>
+      </div>
+      <label class="drop-zone" id="drop-b">
+        <input type="file" id="file-b" accept="image/png,image/jpeg,image/webp,image/bmp" hidden />
+        <div class="drop-hint">
+          <strong>点击选择 / 拖入图片</strong>
+          <small>PNG · JPG · WebP · BMP</small>
+        </div>
+      </label>
+      <div class="meta" id="meta-b"></div>
+    </div>
+  </section>
+
+  <!-- 尺寸不一致提示条 -->
+  <div class="alert hidden" id="size-alert" role="alert">
+    <strong>⚠ 两张图尺寸不一致</strong>
+    <span id="size-alert-text"></span>
+  </div>
+
+  <main class="workbench">
+    <!-- ② 左侧控制栏 -->
+    <aside class="sidebar">
+      <section class="panel">
+        <h2>对齐方式</h2>
+        <div class="radio-col" id="align-mode-group">
+          <label><input type="radio" name="align" value="contain" checked /> 等比缩放对齐（推荐）</label>
+          <label><input type="radio" name="align" value="overlap" /> 原始尺寸左上对齐（不缩放）</label>
+          <label><input type="radio" name="align" value="stretch" /> 拉伸填满（忽略比例）</label>
+        </div>
+        <div class="mini-meta" id="align-meta"></div>
+      </section>
+
+      <section class="panel">
+        <h2>差异计算</h2>
+        <label class="slider-label">
+          差异阈值 <span class="value" id="threshold-value">8.0%</span>
+          <input type="range" id="threshold" min="0" max="80" step="0.5" value="8" />
+          <small class="muted">低于阈值的像素不计入变化，可随时调整实时重算</small>
+        </label>
+        <label class="check">
+          <input type="checkbox" id="normalize-brightness" checked />
+          亮度归一化（抵消整体亮度漂移）
+        </label>
+        <label class="check">
+          <input type="checkbox" id="alpha-aware" checked />
+          透明通道感知（全透明区域不报错）
+        </label>
+        <label class="slider-label compact">
+          Alpha 变化权重 <span class="value" id="alpha-weight-value">0.35</span>
+          <input type="range" id="alpha-weight" min="0" max="1" step="0.05" value="0.35" />
+        </label>
+      </section>
+
+      <section class="panel">
+        <h2>视图模式</h2>
+        <div class="seg" id="view-mode-group">
+          <button type="button" data-view="slider" class="active">滑块对照</button>
+          <button type="button" data-view="overlay">半透明叠加</button>
+          <button type="button" data-view="heat">差异热图</button>
+        </div>
+        <div id="overlay-controls" class="sub-controls hidden">
+          <label class="slider-label compact">
+            B 图不透明度 <span class="value" id="overlay-opacity-value">50%</span>
+            <input type="range" id="overlay-opacity" min="0" max="100" step="1" value="50" />
+          </label>
+        </div>
+        <div id="heat-controls" class="sub-controls hidden">
+          <label class="check">
+            <input type="checkbox" id="heat-hide-sub" />
+            隐藏低于阈值的像素（只看改动区域）
+          </label>
+          <div class="legend" id="heat-legend">
+            <div class="legend-bar"></div>
+            <div class="legend-labels"><span>低（阈值）</span><span>高 100%</span></div>
+            <div class="legend-uncovered"><i></i> 未覆盖区域</div>
+          </div>
+        </div>
+        <div id="slider-controls" class="sub-controls">
+          <label class="slider-label compact">
+            分割位置 <span class="value" id="split-value">50%</span>
+            <input type="range" id="split" min="0" max="100" step="1" value="50" />
+          </label>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>框选区域 ROI</h2>
+        <div class="roi-toolbar">
+          <label class="check"><input type="checkbox" id="roi-draw-mode" /> 拖拽框选模式</label>
+          <button type="button" class="btn tiny" id="btn-clear-rois">清空全部</button>
+        </div>
+        <ul class="roi-list" id="roi-list"></ul>
+      </section>
+
+      <section class="panel">
+        <h2>视图操作</h2>
+        <div class="zoom-toolbar">
+          <button type="button" class="btn tiny" id="btn-zoom-out">－</button>
+          <span class="zoom-value" id="zoom-value">100%</span>
+          <button type="button" class="btn tiny" id="btn-zoom-in">＋</button>
+          <button type="button" class="btn tiny" id="btn-zoom-fit">适应</button>
+          <button type="button" class="btn tiny" id="btn-zoom-100">1:1</button>
+        </div>
+        <small class="muted">滚轮缩放 · 滑块视图左键拖分割线，其他视图左键拖拽平移 · 双击适应窗口 · 800% 以上显示像素网格</small>
+      </section>
+    </aside>
+
+    <!-- ③ 右侧视图 + 指标 + 像素检查器 + 处理状态 -->
+    <section class="main-col">
+      <div class="stats-bar" id="stats-bar">
+        <div class="stat"><span class="stat-label">差异像素占比</span><strong id="stat-ratio">—</strong></div>
+        <div class="stat"><span class="stat-label">差异像素</span><strong id="stat-changed">—</strong></div>
+        <div class="stat"><span class="stat-label">有效像素</span><strong id="stat-covered">—</strong></div>
+        <div class="stat"><span class="stat-label">平均差异</span><strong id="stat-mean">—</strong></div>
+        <div class="stat"><span class="stat-label">最大差异</span><strong id="stat-max">—</strong></div>
+        <div class="stat"><span class="stat-label">亮度补偿系数</span><strong id="stat-bright">—</strong></div>
+      </div>
+
+      <div class="viewport" id="viewport">
+        <div class="canvas-stage" id="stage">
+          <canvas id="view-canvas"></canvas>
+          <div class="roi-layer" id="roi-layer"></div>
+          <div class="split-handle hidden" id="split-handle"><span></span></div>
+        </div>
+        <div class="empty-state" id="empty-state">
+          <p>导入同一场景的两张截图开始检查</p>
+          <button type="button" class="btn primary" id="btn-samples-2">载入内置示例截图</button>
+        </div>
+        <div class="progress-overlay hidden" id="progress-overlay">
+          <div class="progress-box">
+            <strong id="progress-title">处理中…</strong>
+            <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+            <span class="muted" id="progress-text">0%</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="bottom-row">
+        <div class="panel pixel-inspector">
+          <h2>像素检查器（放大到具体像素）</h2>
+          <div id="pixel-info" class="muted">在视图上移动鼠标查看该像素的 A/B 值与差异</div>
+        </div>
+        <div class="panel process-log">
+          <h2>处理状态</h2>
+          <ul id="log-list" class="log-list"></ul>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="main.js"></script>
+</body>
+</html>

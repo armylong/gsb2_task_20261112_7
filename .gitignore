@@ -20,6 +20,10 @@ data.json
 *.sqlite3
 tmp/
 
+# 工具导出的检查报告（按需保存，不进仓库）
+diff-report-*.png
+diff-report-*.json
+
 # ---- 依赖与构建产物 ----
 node_modules/
 __pycache__/
